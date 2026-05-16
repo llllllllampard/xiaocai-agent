@@ -698,35 +698,36 @@ if _qp.get("_action") == "toggle_history":
 # 天然跟随 sidebar 宽度，无需 JavaScript 手动调整
 st.markdown("""
 <style>
-/* 1. 让 Streamlit 原生 header 变成我们的容器 */
+/* 1. Streamlit 原生 header：绿色背景，保留原有布局结构不动 */
 header[data-testid="stHeader"] {
     background: linear-gradient(135deg, #3E7B58 0%, #2D5E43 60%, #1E4530 100%) !important;
     height: 52px !important;
     min-height: 52px !important;
-    padding: 0 20px !important;
-    display: flex !important;
-    align-items: center !important;
     box-shadow: 0 2px 12px rgba(0,0,0,0.15) !important;
     z-index: 999990 !important;
 }
-/* 2. 隐藏 header 内 Streamlit 原有的按钮/菜单（保留 sidebar 展开按钮） */
-header[data-testid="stHeader"] > div:not([data-testid="stDecoration"]) {
+/* 2. 隐藏 header 内 Streamlit 原有文字/菜单，但不隐藏整个div（保留sidebar按钮） */
+header[data-testid="stHeader"] [data-testid="stToolbar"],
+header[data-testid="stHeader"] [data-testid="stDecoration"] {
     display: none !important;
 }
-/* 3. 自定义顶栏内容覆盖在 header 上 */
+/* 3. 自定义顶栏内容：覆盖在 header 上，left/right 由 JS 从 header 自身读取 */
 .xiaocai-topbar-inner {
     position: fixed;
     top: 0;
-    /* left/right 跟随 Streamlit header，天然随 sidebar 变化 */
-    left: var(--sidebar-width, 0px);
+    left: 0;   /* JS 会实时更新为 header.getBoundingClientRect().left */
     right: 0;
     height: 52px;
     z-index: 999991;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 20px;
-    pointer-events: none; /* 让 sidebar 按钮可以被点击 */
+    /* 宽度与聊天内容区对齐：max-width + 居中 */
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 0 1.8rem;
+    pointer-events: none;
+    /* left/right 将由 JS 动态设置，覆盖上面的 left:0/right:0 */
 }
 .xiaocai-topbar-inner > * { pointer-events: all; }
 .xiaocai-topbar-left {
@@ -788,23 +789,21 @@ header[data-testid="stHeader"] > div:not([data-testid="stDecoration"]) {
 <script>
 (function() {
   function sync() {
-    var header = document.querySelector('header[data-testid="stHeader"]');
-    var bar    = document.getElementById('xiaocai-topbar-inner');
-    var chat   = document.querySelector('[data-testid="stChatInput"]');
-    if (!header || !bar) return;
+    var chat = document.querySelector('[data-testid="stChatInput"]');
+    var bar  = document.getElementById('xiaocai-topbar-inner');
+    if (!chat) return;
 
-    // Streamlit 原生 header 自己会随 sidebar 动态调整 left
-    // 我们直接读 header 的当前 left 值，跟随它即可
-    var headerLeft = header.getBoundingClientRect().left;
-    bar.style.left  = headerLeft + 'px';
-    if (chat) chat.style.left = headerLeft + 'px';
+    // 读 chat_input 的精确 left/right，顶栏完全跟随它
+    var rect = chat.getBoundingClientRect();
+    if (bar) {
+      bar.style.left  = rect.left + 'px';
+      bar.style.right = (window.innerWidth - rect.right) + 'px';
+      bar.style.maxWidth = 'none';  // 清除 CSS max-width，改用精确像素
+      bar.style.margin = '0';
+      bar.style.padding = '0 ' + (rect.left > 0 ? '1.8rem' : '20px');
+    }
   }
-
-  // 用 requestAnimationFrame 在每帧都同步，动画过程中不会错位
-  function loop() {
-    sync();
-    requestAnimationFrame(loop);
-  }
+  function loop() { sync(); requestAnimationFrame(loop); }
   loop();
 })();
 </script>
@@ -918,100 +917,64 @@ if pending_msg:
 # 支持图片 + 文档，上传后暂存，随下一条文字消息一起发送
 st.markdown("""
 <style>
-/* ── Streamlit 原生 chat_input 容器：隐藏它本身，我们自己控制位置 ── */
-/* chat_input 已经是 fixed bottom，我们只需要调整 left 随 sidebar 变化 */
+/* ── 聊天输入框：减小上下内边距（缩小约1/4高度）── */
 [data-testid="stChatInput"] {
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    z-index: 1001 !important;
-    transition: left 0.3s ease !important;
+    padding: 4px 12px 6px !important;
     background: #F7F4EE !important;
     border-top: 1px solid #E0D8CC !important;
     box-shadow: 0 -3px 16px rgba(42,33,24,0.08) !important;
-    padding: 8px 16px 10px !important;
+}
+[data-testid="stChatInput"] textarea {
+    min-height: 36px !important;
+    max-height: 120px !important;
+    padding: 6px 46px 6px 12px !important;  /* 右侧留46px给附件按钮 */
 }
 
-/* ── 附件按钮容器：固定在底部，紧贴 chat_input 右侧 ── */
-#xiaocai-bottombar {
-    position: fixed;
-    bottom: 8px;
-    right: 16px;
-    z-index: 1002;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    transition: left 0.3s ease;
-    pointer-events: none; /* 让底下的 chat_input 仍可点击 */
+/* ── 附件上传：绝对定位叠在 chat_input 内部右侧 ── */
+/* 把 file_uploader 的列容器移到 chat_input 右下角 */
+div[data-testid="stFileUploaderDropzoneInstructions"] { display: none !important; }
+div[data-testid="stFileUploaderDropzone"] {
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    min-height: unset !important;
+    width: 36px !important;
 }
-#xiaocai-bottombar > * { pointer-events: all; }
-
-/* 附件上传器：压成图标按钮 */
-[data-testid="stFileUploaderDropzoneInstructions"] { display: none !important; }
-[data-testid="stFileUploaderDropzone"] {
-    padding: 0 !important; border: none !important;
-    background: transparent !important; min-height: unset !important;
-}
-[data-testid="stFileUploaderDropzone"] button {
-    height: 38px !important; width: 38px !important;
-    padding: 0 !important; border-radius: 9px !important;
+div[data-testid="stFileUploaderDropzone"] button {
+    height: 32px !important;
+    width: 32px !important;
+    min-width: 32px !important;
+    padding: 0 !important;
+    border-radius: 7px !important;
     border: 1.5px solid #C8D8C2 !important;
-    background: #FDFBF7 !important;
+    background: rgba(247,244,238,0.9) !important;
+    font-size: 14px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
 }
-[data-testid="stFileUploaderDropzone"] button span { display: none !important; }
-[data-testid="stFileUploaderDropzone"] button::before { content: "📎"; font-size: 15px; }
+div[data-testid="stFileUploaderDropzone"] button span { display: none !important; }
+div[data-testid="stFileUploaderDropzone"] button::before { content: "📎"; }
 
-/* 附件徽章（显示在输入框上方） */
+/* 附件徽章 */
 .attach-badge {
-    position: fixed;
-    bottom: 62px;
-    right: 70px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     background: #EAF5ED;
     border: 1px solid #B8D8C4;
-    border-radius: 16px;
-    padding: 3px 10px;
-    font-size: 0.8rem;
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 0.78rem;
     color: #2D5A3D;
-    z-index: 1003;
-    max-width: 260px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    margin-bottom: 4px;
 }
 </style>
-
-<!-- 底栏容器（仅放附件按钮，JS 同步 left） -->
-<div id="xiaocai-bottombar"></div>
-
-<script>
-(function() {
-  function syncLeft() {
-    var sidebar  = document.querySelector('[data-testid="stSidebar"]');
-    var topbar   = document.getElementById('xiaocai-topbar');
-    var bottombar= document.getElementById('xiaocai-bottombar');
-    var chatInput= document.querySelector('[data-testid="stChatInput"]');
-    if (!sidebar) return;
-
-    var rect = sidebar.getBoundingClientRect();
-    var sidebarW = (rect.width > 10 && rect.right > 0) ? rect.right : 0;
-
-    if (topbar)    topbar.style.left    = sidebarW + 'px';
-    if (chatInput) chatInput.style.left = sidebarW + 'px';
-    // bottombar 右侧对齐不变，left 不需要改
-  }
-  syncLeft();
-  var ro = new ResizeObserver(syncLeft);
-  var sb = document.querySelector('[data-testid="stSidebar"]');
-  if (sb) ro.observe(sb);
-  var mo = new MutationObserver(syncLeft);
-  mo.observe(document.body, { childList: true, subtree: true, attributes: true,
-                               attributeFilter: ['style', 'class'] });
-  setInterval(syncLeft, 300);
-})();
-</script>
 """, unsafe_allow_html=True)
 
-# 附件上传控件（Streamlit 渲染后 JS 会把它移入 bottombar）
+# ── 附件按钮：用 CSS 绝对定位叠入 chat_input 右侧 ───────────
+# st.chat_input 必须在顶层，无法放进 column。
+# 解决方案：附件 uploader 渲染到页面流，JS 把它物理移到 chat_input 内部。
 uploader_key = f"attach_{st.session_state.get('_uploader_key', 0)}"
 uploaded_file = st.file_uploader(
     "📎",
@@ -1020,7 +983,7 @@ uploaded_file = st.file_uploader(
     label_visibility="collapsed",
 )
 
-# 有附件时显示悬浮徽章 + 暂存
+# 有附件时显示徽章 + 暂存
 if uploaded_file is not None:
     fname = uploaded_file.name
     st.markdown(f'<div class="attach-badge">📎 {fname}</div>', unsafe_allow_html=True)
@@ -1028,7 +991,55 @@ if uploaded_file is not None:
     st.session_state["_pending_file_b64"] = base64.b64encode(uploaded_file.getvalue()).decode()
     st.session_state["_pending_file_type"] = uploaded_file.type or ""
 
-# 聊天输入框
+# JS：把 file_uploader 按钮物理移到 chat_input 容器内右侧
+st.markdown("""
+<script>
+(function() {
+  function moveAttachBtn() {
+    var chat = document.querySelector('[data-testid="stChatInput"]');
+    var uploader = document.querySelector('[data-testid="stFileUploaderDropzone"]');
+    if (!chat || !uploader) return;
+    // 已经在 chat 内部则跳过
+    if (chat.contains(uploader)) return;
+
+    // 让 chat 容器变为 relative，以便绝对定位子元素
+    chat.style.position = 'relative';
+
+    // 把 uploader 按钮移入 chat 容器
+    var btn = uploader.querySelector('button');
+    if (!btn) return;
+    btn.style.cssText = [
+      'position:absolute', 'right:50px', 'bottom:6px',
+      'height:32px', 'width:32px', 'border-radius:7px',
+      'border:1.5px solid #C8D8C2', 'background:transparent',
+      'cursor:pointer', 'font-size:14px', 'z-index:10',
+      'display:flex', 'align-items:center', 'justify-content:center'
+    ].join(';');
+
+    // 隐藏 uploader 原来的包裹容器（只保留 button 本身放入 chat）
+    var uploaderWrapper = uploader.closest('[data-testid="stFileUploader"]');
+    if (uploaderWrapper) uploaderWrapper.style.display = 'none';
+
+    chat.appendChild(btn);
+
+    // 点击按钮触发 uploader input（如果原 input 还存在）
+    btn.onclick = function(e) {
+      var inp = document.querySelector('input[type="file"]');
+      if (inp) inp.click();
+      e.stopPropagation();
+    };
+  }
+
+  // 等 DOM 稳定后执行
+  setTimeout(moveAttachBtn, 500);
+  setTimeout(moveAttachBtn, 1500);
+  var mo = new MutationObserver(moveAttachBtn);
+  mo.observe(document.body, { childList: true, subtree: true });
+})();
+</script>
+""", unsafe_allow_html=True)
+
+# 聊天输入框（必须在顶层）
 user_input = st.chat_input("和小财聊聊吧～")
 
 # ── 处理带附件的发送 ─────────────────────────────────────────
