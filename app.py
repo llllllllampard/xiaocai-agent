@@ -695,7 +695,7 @@ if _qp.get("_action") == "toggle_history":
 
 st.markdown("""
 <style>
-/* ── 固定顶栏 ── */
+/* ── 固定顶栏：初始 left=0，JS 动态调整 ── */
 .xiaocai-topbar {
     position: fixed;
     top: 0;
@@ -703,82 +703,102 @@ st.markdown("""
     right: 0;
     z-index: 9999;
     background: linear-gradient(135deg, #3E7B58 0%, #2D5E43 60%, #1E4530 100%);
-    padding: 10px 24px;
+    padding: 0 20px;
+    height: 54px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     box-shadow: 0 2px 12px rgba(0,0,0,0.18);
-    min-height: 52px;
+    transition: left 0.3s ease;
 }
 .xiaocai-topbar-left {
     display: flex;
     align-items: center;
-    gap: 10px;
-    flex: 1;
+    gap: 8px;
+    overflow: hidden;
 }
 .xiaocai-topbar-title {
     font-family: 'ZCOOL XiaoWei', serif;
-    font-size: 1.25rem;
+    font-size: 1.2rem;
     color: #fff;
-    font-weight: 400;
+    white-space: nowrap;
     letter-spacing: 0.06em;
+}
+.xiaocai-topbar-sep { color: rgba(255,255,255,0.4); margin: 0 4px; }
+.xiaocai-topbar-sub {
+    font-size: 0.78rem;
+    color: rgba(255,255,255,0.72);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
-.xiaocai-topbar-subtitle {
-    font-size: 0.8rem;
-    color: rgba(255,255,255,0.75);
-    white-space: nowrap;
-    margin-left: 4px;
-}
-.xiaocai-topbar-divider {
-    color: rgba(255,255,255,0.35);
-    margin: 0 8px;
-}
-.xiaocai-topbar-btns {
-    display: flex;
-    gap: 8px;
-    flex-shrink: 0;
-}
+.xiaocai-topbar-btns { display: flex; gap: 8px; flex-shrink: 0; }
 .topbar-btn {
-    background: rgba(255,255,255,0.15);
-    border: 1px solid rgba(255,255,255,0.3);
-    color: #fff;
+    background: rgba(255,255,255,0.14);
+    border: 1px solid rgba(255,255,255,0.28);
+    color: #fff !important;
     border-radius: 8px;
     padding: 5px 13px;
-    font-size: 0.82rem;
+    font-size: 0.80rem;
     cursor: pointer;
-    text-decoration: none;
-    transition: background 0.15s;
+    text-decoration: none !important;
     white-space: nowrap;
     font-family: 'Noto Sans SC', sans-serif;
+    transition: background 0.15s;
 }
-.topbar-btn:hover {
-    background: rgba(255,255,255,0.28);
-    color: #fff;
-    text-decoration: none;
-}
-/* 主内容区顶部留出顶栏高度 */
+.topbar-btn:hover { background: rgba(255,255,255,0.26); }
+
+/* 主内容区：顶部留出顶栏 + 底部留出底栏 */
 .main .block-container {
-    margin-top: 62px !important;
-    padding-top: 8px !important;
+    margin-top: 54px !important;
+    padding-top: 12px !important;
+    padding-bottom: 90px !important;
 }
-/* 侧边栏顶部也要留出 */
-[data-testid="stSidebar"] > div:first-child {
-    padding-top: 62px !important;
-}
+[data-testid="stSidebar"] > div:first-child { padding-top: 54px !important; }
 </style>
 
-<div class="xiaocai-topbar">
+<div class="xiaocai-topbar" id="xiaocai-topbar">
   <div class="xiaocai-topbar-left">
     <span class="xiaocai-topbar-title">🌱 小财</span>
-    <span class="xiaocai-topbar-divider">·</span>
-    <span class="xiaocai-topbar-subtitle">你的理财搭子 · 从第一步开始，陪你把钱管好</span>
+    <span class="xiaocai-topbar-sep">·</span>
+    <span class="xiaocai-topbar-sub">你的理财搭子 · 从第一步开始，陪你把钱管好</span>
   </div>
   <div class="xiaocai-topbar-btns">
     <a class="topbar-btn" href="?_action=toggle_history">📖 历史对话</a>
     <a class="topbar-btn" href="?_action=new_chat">🆕 新对话</a>
   </div>
 </div>
+
+<script>
+(function() {
+  // 动态检测 sidebar 宽度，调整顶栏和底栏的 left 值
+  function syncLeft() {
+    var sidebar = document.querySelector('[data-testid="stSidebar"]');
+    var topbar  = document.getElementById('xiaocai-topbar');
+    var bottombar = document.getElementById('xiaocai-bottombar');
+    if (!sidebar || !topbar) return;
+
+    var rect = sidebar.getBoundingClientRect();
+    // sidebar 可见且宽度 > 0 才偏移
+    var sidebarW = (rect.width > 10 && rect.right > 0) ? rect.right : 0;
+
+    topbar.style.left = sidebarW + 'px';
+    if (bottombar) bottombar.style.left = sidebarW + 'px';
+  }
+
+  // 初始运行
+  syncLeft();
+  // ResizeObserver 监听 sidebar 变化（展开/收缩）
+  var ro = new ResizeObserver(syncLeft);
+  var sidebar = document.querySelector('[data-testid="stSidebar"]');
+  if (sidebar) ro.observe(sidebar);
+  // MutationObserver 捕捉 sidebar 出现/消失
+  var mo = new MutationObserver(syncLeft);
+  mo.observe(document.body, { childList: true, subtree: true, attributes: true });
+  // 定期兜底（动画结束后）
+  setInterval(syncLeft, 400);
+})();
+</script>
 """, unsafe_allow_html=True)
 
 # 历史对话面板（折叠展开）
@@ -889,91 +909,118 @@ if pending_msg:
 # 支持图片 + 文档，上传后暂存，随下一条文字消息一起发送
 st.markdown("""
 <style>
-/* ── 聊天输入框固定底部，确保不被遮挡 ── */
+/* ── Streamlit 原生 chat_input 容器：隐藏它本身，我们自己控制位置 ── */
+/* chat_input 已经是 fixed bottom，我们只需要调整 left 随 sidebar 变化 */
 [data-testid="stChatInput"] {
-    position: fixed !important;
-    bottom: 0 !important;
     left: 0 !important;
     right: 0 !important;
-    z-index: 1000 !important;
-    padding: 10px 20px 12px !important;
-    background: var(--c-paper, #F7F4EE) !important;
+    bottom: 0 !important;
+    z-index: 1001 !important;
+    transition: left 0.3s ease !important;
+    background: #F7F4EE !important;
     border-top: 1px solid #E0D8CC !important;
-    box-shadow: 0 -4px 20px rgba(42,33,24,0.07) !important;
-    max-width: 100% !important;
+    box-shadow: 0 -3px 16px rgba(42,33,24,0.08) !important;
+    padding: 8px 16px 10px !important;
 }
-/* 附件上传器：完全隐藏，只露出触发按钮 */
-[data-testid="stFileUploaderDropzoneInstructions"] { display: none !important; }
-[data-testid="stFileUploaderDropzone"] {
-    padding: 0 !important;
-    border: none !important;
-    background: transparent !important;
-    min-height: unset !important;
-    width: auto !important;
-}
-[data-testid="stFileUploaderDropzone"] button {
-    height: 36px !important;
-    width: 36px !important;
-    min-width: 36px !important;
-    padding: 0 !important;
-    font-size: 16px !important;
-    border-radius: 8px !important;
-    border: 1.5px solid #C8D8C2 !important;
-    background: #FDFBF7 !important;
-    line-height: 1 !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-}
-/* 隐藏 "Browse files" 文字，只保留图标 */
-[data-testid="stFileUploaderDropzone"] button span { display: none !important; }
-[data-testid="stFileUploaderDropzone"] button::before { content: "📎"; font-size: 16px; }
-/* 已选附件名称标签 */
-.attachment-badge {
-    display: inline-flex;
+
+/* ── 附件按钮容器：固定在底部，紧贴 chat_input 右侧 ── */
+#xiaocai-bottombar {
+    position: fixed;
+    bottom: 8px;
+    right: 16px;
+    z-index: 1002;
+    display: flex;
     align-items: center;
     gap: 6px;
+    transition: left 0.3s ease;
+    pointer-events: none; /* 让底下的 chat_input 仍可点击 */
+}
+#xiaocai-bottombar > * { pointer-events: all; }
+
+/* 附件上传器：压成图标按钮 */
+[data-testid="stFileUploaderDropzoneInstructions"] { display: none !important; }
+[data-testid="stFileUploaderDropzone"] {
+    padding: 0 !important; border: none !important;
+    background: transparent !important; min-height: unset !important;
+}
+[data-testid="stFileUploaderDropzone"] button {
+    height: 38px !important; width: 38px !important;
+    padding: 0 !important; border-radius: 9px !important;
+    border: 1.5px solid #C8D8C2 !important;
+    background: #FDFBF7 !important;
+}
+[data-testid="stFileUploaderDropzone"] button span { display: none !important; }
+[data-testid="stFileUploaderDropzone"] button::before { content: "📎"; font-size: 15px; }
+
+/* 附件徽章（显示在输入框上方） */
+.attach-badge {
+    position: fixed;
+    bottom: 62px;
+    right: 70px;
     background: #EAF5ED;
     border: 1px solid #B8D8C4;
-    border-radius: 20px;
-    padding: 3px 10px 3px 8px;
-    font-size: 0.82rem;
+    border-radius: 16px;
+    padding: 3px 10px;
+    font-size: 0.8rem;
     color: #2D5A3D;
-    margin-bottom: 6px;
+    z-index: 1003;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 </style>
+
+<!-- 底栏容器（仅放附件按钮，JS 同步 left） -->
+<div id="xiaocai-bottombar"></div>
+
+<script>
+(function() {
+  function syncLeft() {
+    var sidebar  = document.querySelector('[data-testid="stSidebar"]');
+    var topbar   = document.getElementById('xiaocai-topbar');
+    var bottombar= document.getElementById('xiaocai-bottombar');
+    var chatInput= document.querySelector('[data-testid="stChatInput"]');
+    if (!sidebar) return;
+
+    var rect = sidebar.getBoundingClientRect();
+    var sidebarW = (rect.width > 10 && rect.right > 0) ? rect.right : 0;
+
+    if (topbar)    topbar.style.left    = sidebarW + 'px';
+    if (chatInput) chatInput.style.left = sidebarW + 'px';
+    // bottombar 右侧对齐不变，left 不需要改
+  }
+  syncLeft();
+  var ro = new ResizeObserver(syncLeft);
+  var sb = document.querySelector('[data-testid="stSidebar"]');
+  if (sb) ro.observe(sb);
+  var mo = new MutationObserver(syncLeft);
+  mo.observe(document.body, { childList: true, subtree: true, attributes: true,
+                               attributeFilter: ['style', 'class'] });
+  setInterval(syncLeft, 300);
+})();
+</script>
 """, unsafe_allow_html=True)
 
+# 附件上传控件（Streamlit 渲染后 JS 会把它移入 bottombar）
 uploader_key = f"attach_{st.session_state.get('_uploader_key', 0)}"
-_attach_col, _ = st.columns([1, 10])
-with _attach_col:
-    uploaded_file = st.file_uploader(
-        "附件",
-        type=["jpg", "jpeg", "png", "webp", "pdf", "txt", "csv", "xlsx", "docx", "md"],
-        key=uploader_key,
-        label_visibility="collapsed",
-    )
+uploaded_file = st.file_uploader(
+    "📎",
+    type=["jpg", "jpeg", "png", "webp", "pdf", "txt", "csv", "xlsx", "docx", "md"],
+    key=uploader_key,
+    label_visibility="collapsed",
+)
 
-# 有附件时在输入框上方显示文件名徽章
+# 有附件时显示悬浮徽章 + 暂存
 if uploaded_file is not None:
     fname = uploaded_file.name
-    st.markdown(
-        f'<div class="attachment-badge">📎 {fname}'
-        f' &nbsp;<span style="color:#888;cursor:pointer;" title="取消">✕</span></div>',
-        unsafe_allow_html=True,
-    )
-    # 暂存到 session_state（不立即发送）
+    st.markdown(f'<div class="attach-badge">📎 {fname}</div>', unsafe_allow_html=True)
     st.session_state["_pending_file_name"] = fname
     st.session_state["_pending_file_b64"] = base64.b64encode(uploaded_file.getvalue()).decode()
     st.session_state["_pending_file_type"] = uploaded_file.type or ""
-else:
-    # 文件被移除时清空暂存
-    if "_pending_file_name" in st.session_state and not uploaded_file:
-        # 只在没有 pending_image_b64 时才清空（避免清掉刚暂存的）
-        pass
 
-# 聊天输入框：文字 + 附件一起发送
-user_input = st.chat_input("和小财聊聊吧～（可先上传附件再输入说明）")
+# 聊天输入框
+user_input = st.chat_input("和小财聊聊吧～")
 
 # ── 处理带附件的发送 ─────────────────────────────────────────
 if user_input:
