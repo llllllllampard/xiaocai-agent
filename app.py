@@ -676,28 +676,110 @@ with st.sidebar:
             st.caption(f"最近优化：{s['latest_change'][:60]}")
 
 
-# ── 主界面 ────────────────────────────────────────────────────
+# ── 固定顶栏（纯 HTML，position:fixed）────────────────────────
+# 按钮用表单+隐藏提交模拟点击，避免 Streamlit rerun 问题
+# 用 st.query_params 传递顶栏点击信号
+_qp = st.query_params
+if _qp.get("_action") == "new_chat":
+    st.session_state.history = []
+    st.session_state.session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    st.session_state.pending_feedback = None
+    st.session_state.pending_user_msg = None
+    st.session_state.viewing_session_id = None
+    st.query_params.clear()
+    st.rerun()
+if _qp.get("_action") == "toggle_history":
+    st.session_state["_show_history_panel"] = not st.session_state.get("_show_history_panel", False)
+    st.query_params.clear()
+    st.rerun()
+
 st.markdown("""
-<div class="xiaocai-banner">
-  <h2>🌱 小财</h2>
-  <p>你的理财搭子 · 从第一步开始，陪你把钱管好</p>
+<style>
+/* ── 固定顶栏 ── */
+.xiaocai-topbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 9999;
+    background: linear-gradient(135deg, #3E7B58 0%, #2D5E43 60%, #1E4530 100%);
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+    min-height: 52px;
+}
+.xiaocai-topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+.xiaocai-topbar-title {
+    font-family: 'ZCOOL XiaoWei', serif;
+    font-size: 1.25rem;
+    color: #fff;
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+}
+.xiaocai-topbar-subtitle {
+    font-size: 0.8rem;
+    color: rgba(255,255,255,0.75);
+    white-space: nowrap;
+    margin-left: 4px;
+}
+.xiaocai-topbar-divider {
+    color: rgba(255,255,255,0.35);
+    margin: 0 8px;
+}
+.xiaocai-topbar-btns {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+.topbar-btn {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    border-radius: 8px;
+    padding: 5px 13px;
+    font-size: 0.82rem;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s;
+    white-space: nowrap;
+    font-family: 'Noto Sans SC', sans-serif;
+}
+.topbar-btn:hover {
+    background: rgba(255,255,255,0.28);
+    color: #fff;
+    text-decoration: none;
+}
+/* 主内容区顶部留出顶栏高度 */
+.main .block-container {
+    margin-top: 62px !important;
+    padding-top: 8px !important;
+}
+/* 侧边栏顶部也要留出 */
+[data-testid="stSidebar"] > div:first-child {
+    padding-top: 62px !important;
+}
+</style>
+
+<div class="xiaocai-topbar">
+  <div class="xiaocai-topbar-left">
+    <span class="xiaocai-topbar-title">🌱 小财</span>
+    <span class="xiaocai-topbar-divider">·</span>
+    <span class="xiaocai-topbar-subtitle">你的理财搭子 · 从第一步开始，陪你把钱管好</span>
+  </div>
+  <div class="xiaocai-topbar-btns">
+    <a class="topbar-btn" href="?_action=toggle_history">📖 历史对话</a>
+    <a class="topbar-btn" href="?_action=new_chat">🆕 新对话</a>
+  </div>
 </div>
 """, unsafe_allow_html=True)
-
-# ── 顶部工具栏：历史对话 + 新对话 ────────────────────────────
-top_col1, top_col2, top_col3 = st.columns([4, 1, 1])
-with top_col2:
-    if st.button("📖 历史对话", use_container_width=True):
-        st.session_state["_show_history_panel"] = not st.session_state.get("_show_history_panel", False)
-        st.rerun()
-with top_col3:
-    if st.button("🆕 新对话", use_container_width=True):
-        st.session_state.history = []
-        st.session_state.session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        st.session_state.pending_feedback = None
-        st.session_state.pending_user_msg = None
-        st.session_state.viewing_session_id = None
-        st.rerun()
 
 # 历史对话面板（折叠展开）
 if st.session_state.get("_show_history_panel"):
@@ -803,86 +885,125 @@ if pending_msg:
     run_dispatch(pending_msg, profile)
     st.rerun()
 
-# ── 输入区：图片按钮（左）+ 聊天输入框（右）紧排 ─────────────
-# CSS：把 file_uploader 压缩成图标按钮样式，与 chat_input 视觉对齐
+# ── 附件上传区（在聊天框上方，紧凑显示已选附件）─────────────
+# 支持图片 + 文档，上传后暂存，随下一条文字消息一起发送
 st.markdown("""
 <style>
-/* 图片上传列：压缩到图标大小 */
-div[data-testid="column"]:has(> div > [data-testid="stFileUploaderDropzone"]) {
-    display: flex;
-    align-items: flex-end;
-    padding-bottom: 6px;
+/* ── 聊天输入框固定底部，确保不被遮挡 ── */
+[data-testid="stChatInput"] {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 1000 !important;
+    padding: 10px 20px 12px !important;
+    background: var(--c-paper, #F7F4EE) !important;
+    border-top: 1px solid #E0D8CC !important;
+    box-shadow: 0 -4px 20px rgba(42,33,24,0.07) !important;
+    max-width: 100% !important;
 }
-/* 隐藏上传区的拖拽提示文字，只保留按钮 */
-[data-testid="stFileUploaderDropzoneInstructions"] {
-    display: none !important;
-}
+/* 附件上传器：完全隐藏，只露出触发按钮 */
+[data-testid="stFileUploaderDropzoneInstructions"] { display: none !important; }
 [data-testid="stFileUploaderDropzone"] {
     padding: 0 !important;
     border: none !important;
     background: transparent !important;
     min-height: unset !important;
+    width: auto !important;
 }
 [data-testid="stFileUploaderDropzone"] button {
-    height: 42px !important;
-    width: 42px !important;
+    height: 36px !important;
+    width: 36px !important;
+    min-width: 36px !important;
     padding: 0 !important;
-    font-size: 20px !important;
+    font-size: 16px !important;
     border-radius: 8px !important;
+    border: 1.5px solid #C8D8C2 !important;
+    background: #FDFBF7 !important;
+    line-height: 1 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+/* 隐藏 "Browse files" 文字，只保留图标 */
+[data-testid="stFileUploaderDropzone"] button span { display: none !important; }
+[data-testid="stFileUploaderDropzone"] button::before { content: "📎"; font-size: 16px; }
+/* 已选附件名称标签 */
+.attachment-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #EAF5ED;
+    border: 1px solid #B8D8C4;
+    border-radius: 20px;
+    padding: 3px 10px 3px 8px;
+    font-size: 0.82rem;
+    color: #2D5A3D;
+    margin-bottom: 6px;
 }
 </style>
 """, unsafe_allow_html=True)
 
-img_col, chat_col = st.columns([1, 11])
-with img_col:
-    uploader_key = f"image_upload_{st.session_state.get('_uploader_key', 0)}"
-    uploaded_image = st.file_uploader(
-        "📎",
-        type=["jpg", "jpeg", "png"],
+uploader_key = f"attach_{st.session_state.get('_uploader_key', 0)}"
+_attach_col, _ = st.columns([1, 10])
+with _attach_col:
+    uploaded_file = st.file_uploader(
+        "附件",
+        type=["jpg", "jpeg", "png", "webp", "pdf", "txt", "csv", "xlsx", "docx", "md"],
         key=uploader_key,
         label_visibility="collapsed",
     )
-with chat_col:
-    user_input = st.chat_input("和小财聊聊吧～")
 
-# 图片已选中：在输入框上方显示预览 + 补充说明 + 发送按钮
-if uploaded_image is not None:
-    with st.container(border=True):
-        prev_col, close_col = st.columns([8, 1])
-        with prev_col:
-            st.image(uploaded_image, caption="图片预览", width=200)
-        with close_col:
-            if st.button("✕", key="remove_img", help="取消图片"):
-                st.session_state["_uploader_key"] = st.session_state.get("_uploader_key", 0) + 1
-                st.rerun()
-        img_caption = st.text_input(
-            "补充说明（可选）",
-            placeholder="比如：帮我分析这张账单 / 解读这个K线图……",
-            key="img_caption_input",
-        )
-        if st.button("📤 发送图片给小财", type="primary", key="send_image_btn", use_container_width=True):
-            st.session_state.pending_image_b64 = base64.b64encode(uploaded_image.getvalue()).decode()
-            st.session_state.pending_image_caption = img_caption or "请帮我分析这张图片"
-            st.session_state["_uploader_key"] = st.session_state.get("_uploader_key", 0) + 1
-            st.rerun()
+# 有附件时在输入框上方显示文件名徽章
+if uploaded_file is not None:
+    fname = uploaded_file.name
+    st.markdown(
+        f'<div class="attachment-badge">📎 {fname}'
+        f' &nbsp;<span style="color:#888;cursor:pointer;" title="取消">✕</span></div>',
+        unsafe_allow_html=True,
+    )
+    # 暂存到 session_state（不立即发送）
+    st.session_state["_pending_file_name"] = fname
+    st.session_state["_pending_file_b64"] = base64.b64encode(uploaded_file.getvalue()).decode()
+    st.session_state["_pending_file_type"] = uploaded_file.type or ""
+else:
+    # 文件被移除时清空暂存
+    if "_pending_file_name" in st.session_state and not uploaded_file:
+        # 只在没有 pending_image_b64 时才清空（避免清掉刚暂存的）
+        pass
 
-# 处理待发送图片（发送按钮点击后 rerun 到这里处理）
-if st.session_state.get("pending_image_b64"):
-    img_b64 = st.session_state.pending_image_b64
-    img_caption = st.session_state.get("pending_image_caption", "请帮我分析这张图片")
-    st.session_state.pending_image_b64 = None
-    st.session_state.pending_image_caption = None
+# 聊天输入框：文字 + 附件一起发送
+user_input = st.chat_input("和小财聊聊吧～（可先上传附件再输入说明）")
 
-    with st.chat_message("user", avatar="👤"):
-        st.markdown(f"[已上传图片] {img_caption}")
-    add_message("user", f"[已上传图片] {img_caption}")
-    run_dispatch(img_caption, profile, image_b64=img_b64)
-    st.rerun()
-
-# 处理文字输入
+# ── 处理带附件的发送 ─────────────────────────────────────────
 if user_input:
-    add_message("user", user_input)
-    with st.chat_message("user", avatar="👤"):
-        st.markdown(user_input)
-    run_dispatch(user_input, profile)
+    pending_file_b64 = st.session_state.pop("_pending_file_b64", None)
+    pending_file_name = st.session_state.pop("_pending_file_name", None)
+    pending_file_type = st.session_state.pop("_pending_file_type", "")
+
+    if pending_file_b64:
+        # 重置 uploader key 清空控件
+        st.session_state["_uploader_key"] = st.session_state.get("_uploader_key", 0) + 1
+        display_msg = f"📎 {pending_file_name}\n\n{user_input}"
+        add_message("user", display_msg)
+        with st.chat_message("user", avatar="👤"):
+            st.markdown(display_msg)
+        # 判断是图片还是文档
+        is_image = pending_file_type.startswith("image/")
+        if is_image:
+            run_dispatch(user_input, profile, image_b64=pending_file_b64)
+        else:
+            # 文档：把文件名和内容作为文字上下文传给 LLM
+            import base64 as _b64
+            try:
+                file_text = _b64.b64decode(pending_file_b64).decode("utf-8", errors="replace")[:3000]
+                doc_context = f"用户上传了文件【{pending_file_name}】，内容如下：\n{file_text}\n\n用户问题：{user_input}"
+            except Exception:
+                doc_context = f"用户上传了文件【{pending_file_name}】，请根据用户问题回答：{user_input}"
+            run_dispatch(doc_context, profile)
+    else:
+        add_message("user", user_input)
+        with st.chat_message("user", avatar="👤"):
+            st.markdown(user_input)
+        run_dispatch(user_input, profile)
     st.rerun()
