@@ -693,29 +693,48 @@ if _qp.get("_action") == "toggle_history":
     st.query_params.clear()
     st.rerun()
 
+# ── 把自定义顶栏注入 Streamlit 原生 header ──────────────────
+# 原理：覆盖 Streamlit header 的内容区，用 sticky 定位
+# 天然跟随 sidebar 宽度，无需 JavaScript 手动调整
 st.markdown("""
 <style>
-/* ── 固定顶栏：初始 left=0，JS 动态调整 ── */
-.xiaocai-topbar {
+/* 1. 让 Streamlit 原生 header 变成我们的容器 */
+header[data-testid="stHeader"] {
+    background: linear-gradient(135deg, #3E7B58 0%, #2D5E43 60%, #1E4530 100%) !important;
+    height: 52px !important;
+    min-height: 52px !important;
+    padding: 0 20px !important;
+    display: flex !important;
+    align-items: center !important;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15) !important;
+    z-index: 999990 !important;
+}
+/* 2. 隐藏 header 内 Streamlit 原有的按钮/菜单（保留 sidebar 展开按钮） */
+header[data-testid="stHeader"] > div:not([data-testid="stDecoration"]) {
+    display: none !important;
+}
+/* 3. 自定义顶栏内容覆盖在 header 上 */
+.xiaocai-topbar-inner {
     position: fixed;
     top: 0;
-    left: 0;
+    /* left/right 跟随 Streamlit header，天然随 sidebar 变化 */
+    left: var(--sidebar-width, 0px);
     right: 0;
-    z-index: 9999;
-    background: linear-gradient(135deg, #3E7B58 0%, #2D5E43 60%, #1E4530 100%);
-    padding: 0 20px;
-    height: 54px;
+    height: 52px;
+    z-index: 999991;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.18);
-    transition: left 0.3s ease;
+    padding: 0 20px;
+    pointer-events: none; /* 让 sidebar 按钮可以被点击 */
 }
+.xiaocai-topbar-inner > * { pointer-events: all; }
 .xiaocai-topbar-left {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     overflow: hidden;
+    flex: 1;
 }
 .xiaocai-topbar-title {
     font-family: 'ZCOOL XiaoWei', serif;
@@ -724,13 +743,11 @@ st.markdown("""
     white-space: nowrap;
     letter-spacing: 0.06em;
 }
-.xiaocai-topbar-sep { color: rgba(255,255,255,0.4); margin: 0 4px; }
+.xiaocai-topbar-sep { color: rgba(255,255,255,0.4); margin: 0 3px; font-size: 0.9rem; }
 .xiaocai-topbar-sub {
     font-size: 0.78rem;
     color: rgba(255,255,255,0.72);
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 .xiaocai-topbar-btns { display: flex; gap: 8px; flex-shrink: 0; }
 .topbar-btn {
@@ -748,16 +765,15 @@ st.markdown("""
 }
 .topbar-btn:hover { background: rgba(255,255,255,0.26); }
 
-/* 主内容区：顶部留出顶栏 + 底部留出底栏 */
+/* 4. 主内容区顶部留出 header 高度 */
 .main .block-container {
-    margin-top: 54px !important;
     padding-top: 12px !important;
     padding-bottom: 90px !important;
 }
-[data-testid="stSidebar"] > div:first-child { padding-top: 54px !important; }
 </style>
 
-<div class="xiaocai-topbar" id="xiaocai-topbar">
+<!-- 顶栏内容层：叠在 Streamlit header 上 -->
+<div class="xiaocai-topbar-inner" id="xiaocai-topbar-inner">
   <div class="xiaocai-topbar-left">
     <span class="xiaocai-topbar-title">🌱 小财</span>
     <span class="xiaocai-topbar-sep">·</span>
@@ -771,32 +787,24 @@ st.markdown("""
 
 <script>
 (function() {
-  // 动态检测 sidebar 宽度，调整顶栏和底栏的 left 值
-  function syncLeft() {
-    var sidebar = document.querySelector('[data-testid="stSidebar"]');
-    var topbar  = document.getElementById('xiaocai-topbar');
-    var bottombar = document.getElementById('xiaocai-bottombar');
-    if (!sidebar || !topbar) return;
-
-    var rect = sidebar.getBoundingClientRect();
-    // sidebar 可见且宽度 > 0 才偏移
-    var sidebarW = (rect.width > 10 && rect.right > 0) ? rect.right : 0;
-
-    topbar.style.left = sidebarW + 'px';
-    if (bottombar) bottombar.style.left = sidebarW + 'px';
+  // 只需同步顶栏内容层的 left，跟随 sidebar 右边界
+  function sync() {
+    var sb = document.querySelector('[data-testid="stSidebar"]');
+    var bar = document.getElementById('xiaocai-topbar-inner');
+    var chatInput = document.querySelector('[data-testid="stChatInput"]');
+    if (!bar) return;
+    var left = (sb && sb.getBoundingClientRect().width > 20)
+               ? sb.getBoundingClientRect().right : 0;
+    bar.style.left = left + 'px';
+    if (chatInput) chatInput.style.left = left + 'px';
   }
-
-  // 初始运行
-  syncLeft();
-  // ResizeObserver 监听 sidebar 变化（展开/收缩）
-  var ro = new ResizeObserver(syncLeft);
-  var sidebar = document.querySelector('[data-testid="stSidebar"]');
-  if (sidebar) ro.observe(sidebar);
-  // MutationObserver 捕捉 sidebar 出现/消失
-  var mo = new MutationObserver(syncLeft);
-  mo.observe(document.body, { childList: true, subtree: true, attributes: true });
-  // 定期兜底（动画结束后）
-  setInterval(syncLeft, 400);
+  sync();
+  var sb = document.querySelector('[data-testid="stSidebar"]');
+  if (sb) new ResizeObserver(sync).observe(sb);
+  new MutationObserver(sync).observe(document.body,
+    {childList:true, subtree:true, attributes:true,
+     attributeFilter:['style','class']});
+  setInterval(sync, 300);
 })();
 </script>
 """, unsafe_allow_html=True)
