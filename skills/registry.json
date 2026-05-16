@@ -1,0 +1,57 @@
+{
+  "last_updated": "2026-05-15",
+  "total_skills": 5,
+  "skills": [
+    {
+      "skill_id": "emotion_support",
+      "type": "prompt",
+      "name": "情绪陪伴与认知引导",
+      "file": "prompt_skills/emotion_support.json",
+      "version": 1,
+      "satisfaction_rate": null,
+      "use_count": 0,
+      "status": "initial"
+    },
+    {
+      "skill_id": "onboarding_guide",
+      "type": "prompt",
+      "name": "冷启动引导（目标→测评→建议）",
+      "file": "prompt_skills/onboarding_guide.json",
+      "version": 1,
+      "satisfaction_rate": null,
+      "use_count": 0,
+      "status": "initial"
+    },
+    {
+      "skill_id": "expense_review",
+      "type": "prompt",
+      "name": "消费复盘分析",
+      "file": "prompt_skills/expense_review.json",
+      "version": 1,
+      "satisfaction_rate": null,
+      "use_count": 1,
+      "status": "initial"
+    },
+    {
+      "skill_id": "explain_financial_concept",
+      "type": "prompt",
+      "name": "金融概念自适应解释",
+      "file": "prompt_skills/explain_financial_concept.json",
+      "version": 1,
+      "satisfaction_rate": 1.0,
+      "use_count": 1,
+      "status": "initial",
+      "positive_feedback": 1
+    },
+    {
+      "skill_id": "skill_meta_reflection",
+      "type": "prompt",
+      "name": "Skill自我优化反思",
+      "file": "prompt_skills/skill_meta_reflection.json",
+      "version": 1,
+      "satisfaction_rate": null,
+      "use_count": 0,
+      "status": "initial"
+    }
+  ]
+}

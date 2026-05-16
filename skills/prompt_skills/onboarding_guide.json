@@ -1,0 +1,118 @@
+{
+  "skill_id": "onboarding_guide",
+  "type": "prompt",
+  "name": "冷启动引导",
+  "description": "新用户首次使用时触发。三步骤：理财目标收集→对话式风险测评（3题）→第一步行动建议。顺序不可颠倒：目标驱动动机，动机让用户愿意做测评。",
+  "version": 1,
+  "created_at": "2026-05-15",
+  "last_updated": "2026-05-15",
+  "use_count": 0,
+  "positive_feedback": 0,
+  "negative_feedback": 0,
+  "satisfaction_rate": null,
+  "trigger_conditions": [
+    "user_profile.onboarding_done == false"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "name": "理财目标收集",
+      "template": "你好！我是小财，你的理财搭子～\n先问你一个问题：你现在最想用钱实现什么？\n比如攒旅游基金、备考研备用金，或者就是想让钱别那么快花完？",
+      "collect": [
+        "goal_name",
+        "target_amount",
+        "deadline"
+      ],
+      "tool_call": "calculate_investment_timeline",
+      "follow_up": "好的！要在{deadline}前攒到{target_amount}元，每个月大概需要存{monthly_amount}元。你觉得这个数字可以做到吗？"
+    },
+    {
+      "step": 2,
+      "name": "风险偏好测评",
+      "template": "在帮你制定计划之前，我想了解一下你对风险的态度——就3个问题，很快的～",
+      "questions": [
+        {
+          "id": "Q1",
+          "text": "如果你存了1000元，第二天它变成950元了，你的第一反应是？",
+          "options": {
+            "A": "赶紧取出来，亏了50块太难受",
+            "B": "有点担心，但先观望几天",
+            "C": "正常波动，我会继续持有"
+          },
+          "score": {
+            "A": 1,
+            "B": 2,
+            "C": 3
+          }
+        },
+        {
+          "id": "Q2",
+          "text": "你存的这笔钱，多久之内可能要用到？",
+          "options": {
+            "A": "3个月内可能要用",
+            "B": "半年到一年后",
+            "C": "1年以上，暂时用不到"
+          },
+          "score": {
+            "A": 1,
+            "B": 2,
+            "C": 3
+          }
+        },
+        {
+          "id": "Q3",
+          "text": "你对理财的期望是？",
+          "options": {
+            "A": "不亏就行，安全第一",
+            "B": "稳健增值，小风险可以接受",
+            "C": "争取高收益，愿意承担一定风险"
+          },
+          "score": {
+            "A": 1,
+            "B": 2,
+            "C": 3
+          }
+        }
+      ],
+      "scoring": {
+        "3-4": "保守型",
+        "5-7": "稳健型",
+        "8-9": "积极型"
+      },
+      "tool_call": "score_risk_tolerance"
+    },
+    {
+      "step": 3,
+      "name": "第一步行动建议",
+      "template": "根据你的情况（{risk_level}，目标{goal_name}），我建议你这样开始：\n{advice_points}\n这是你的第一步，简单但很重要。你现在有什么问题吗？",
+      "advice_by_risk": {
+        "保守型": [
+          "① 每月先把{monthly_amount}元放进货币基金（余额宝类），年化约2%，随存随取",
+          "② 攒够3个月的备用金后，我们再聊下一步"
+        ],
+        "稳健型": [
+          "① 每月先把{monthly_amount}元放进货币基金，保证流动性",
+          "② 攒到1000元后，可以考虑指数基金定投，我到时候再教你"
+        ],
+        "积极型": [
+          "① 留够1个月生活费的应急金在货币基金",
+          "② 剩余{monthly_amount}元可以开始每月定投宽基指数基金",
+          "③ 先从小额开始，感受一下市场节奏"
+        ]
+      }
+    }
+  ],
+  "default_params": {
+    "max_questions_per_turn": 1,
+    "tone": "轻松自然，像朋友聊天",
+    "confirm_before_proceed": true
+  },
+  "optimization_log": [
+    {
+      "version": 1,
+      "date": "2026-05-15",
+      "change": "初始版本。顺序设计（目标优先于测评）经产品讨论确认：目标驱动动机最强，用户愿意完成后续流程。",
+      "satisfaction_before": null
+    }
+  ]
+}

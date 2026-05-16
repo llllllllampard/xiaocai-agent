@@ -1,0 +1,31 @@
+{
+  "skill_id": "skill_meta_reflection",
+  "type": "prompt",
+  "name": "Skill自我优化反思",
+  "description": "当某个Skill收到负向反馈（👎）时触发。Agent用此Skill分析失败原因，生成具体的优化建议，写入对应Skill的optimization_log。这是整个自进化系统的核心元能力。",
+  "version": 1,
+  "created_at": "2026-05-15",
+  "last_updated": "2026-05-15",
+  "use_count": 0,
+  "positive_feedback": 0,
+  "negative_feedback": 0,
+  "satisfaction_rate": null,
+  "trigger_conditions": [
+    "用户点击👎按钮后",
+    "某Skill的satisfaction_rate连续3次低于0.6时（批量触发）"
+  ],
+  "template": "以下是一次执行失败的Skill记录：\n\nSkill名称：{skill_name}（v{version}）\nSkill模板：{skill_template}\n\n本次执行输入：{input_params}\n本次执行输出：{output}\n\n用户反馈：👎\n用户说明（若有）：\"{user_feedback_text}\"\n\n请从以下三个维度分析失败原因，并给出具体优化建议：\n\n维度1——模板问题：\n- 模板的哪个部分可能导致输出不佳？\n- 是措辞问题、结构问题，还是约束条件不够清晰？\n- 建议的模板修改：[给出具体修改内容]\n\n维度2——参数问题：\n- 当前default_params是否适合这个用户的情境？\n- 哪个参数值需要调整？调整为多少？\n- 建议的参数修改：[给出具体修改内容]\n\n维度3——上下文理解问题：\n- Agent是否误解了用户的真实需求？\n- 应该路由到哪个Skill更合适？\n- 建议的路由规则修改：[给出具体修改内容]\n\n最终输出格式（用于写入optimization_log）：\n{\n  \"version\": {version+1},\n  \"date\": \"{today}\",\n  \"change\": \"[一句话总结变更内容]\",\n  \"root_cause\": \"[失败根因]\",\n  \"template_change\": \"[模板修改内容，若无则为null]\",\n  \"param_change\": \"[参数修改内容，若无则为null]\",\n  \"satisfaction_before\": {current_satisfaction_rate}\n}",
+  "default_params": {
+    "analysis_depth": "三维度全分析",
+    "output_format": "json_for_optimization_log",
+    "min_feedback_to_trigger": 1
+  },
+  "optimization_log": [
+    {
+      "version": 1,
+      "date": "2026-05-15",
+      "change": "初始版本。这个Skill本身也会被自我反思机制优化——如果meta-reflection的建议质量差，用户可以对这个Skill本身打👎。",
+      "satisfaction_before": null
+    }
+  ]
+}

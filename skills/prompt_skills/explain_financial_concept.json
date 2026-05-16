@@ -1,0 +1,77 @@
+{
+  "skill_id": "explain_financial_concept",
+  "type": "prompt",
+  "name": "金融概念自适应解释",
+  "description": "用户提问金融概念时触发。根据用户已掌握的知识点（来自语义记忆）自动调整解释难度，避免重复讲解已懂的内容。",
+  "version": 1,
+  "created_at": "2026-05-15",
+  "last_updated": "2026-05-15",
+  "use_count": 0,
+  "positive_feedback": 0,
+  "negative_feedback": 0,
+  "satisfaction_rate": null,
+  "trigger_conditions": [
+    "用户提问包含：什么是/怎么理解/能解释一下/xxx是什么意思",
+    "用户消息涉及金融概念关键词：基金/股票/ETF/债券/定投/复利/风险/收益/净值/仓位/分散"
+  ],
+  "template": "用户问题：{user_question}\n用户已掌握的概念：{learned_concepts}\n用户认知成熟度：{concept_maturity}\n\n请按以下逻辑解释{concept}：\n\n【判断难度档位】\n- 若{concept}在learned_concepts中且成熟度>0.7：跳过基础定义，直接讲进阶应用\n- 若{concept}在learned_concepts中但成熟度<0.7：简要复习定义，重点讲清楚应用\n- 若{concept}不在learned_concepts中：从零开始，用类比+生活例子\n\n【解释结构】\n1. 一句话定义（避免专业术语，用大白话）\n2. 生活类比（找一个大学生熟悉的场景作比较）\n3. 具体例子（用真实数字，如\"存1000元，一年后变成xxx元\"）\n4. 与用户已知概念的关联（帮助构建知识网络）\n5. 结尾确认：\"这个清楚了吗？还有什么想了解的？\"\n\n【输出要求】\n- 总字数：入门级150字以内，进阶级250字以内\n- 禁用词：净值、夏普比率、alpha、beta、久期（除非用户主动问）\n- 解释完后将{concept}加入learned_concepts，成熟度设为0.6",
+  "default_params": {
+    "beginner_max_length": 150,
+    "advanced_max_length": 250,
+    "use_analogy": true,
+    "end_with_confirmation": true,
+    "forbidden_jargon": [
+      "净值",
+      "夏普比率",
+      "alpha",
+      "beta",
+      "久期",
+      "凸性",
+      "利差"
+    ]
+  },
+  "concept_difficulty_map": {
+    "入门": [
+      "货币基金",
+      "余额宝",
+      "定期存款",
+      "利率",
+      "复利",
+      "风险",
+      "收益"
+    ],
+    "初级": [
+      "基金",
+      "股票",
+      "债券",
+      "ETF",
+      "指数基金",
+      "定投",
+      "分散投资"
+    ],
+    "中级": [
+      "主动基金",
+      "被动基金",
+      "资产配置",
+      "风险收益比",
+      "波动率",
+      "回撤"
+    ],
+    "高级": [
+      "期权",
+      "期货",
+      "杠杆",
+      "对冲",
+      "量化",
+      "衍生品"
+    ]
+  },
+  "optimization_log": [
+    {
+      "version": 1,
+      "date": "2026-05-15",
+      "change": "初始版本。自适应难度机制（基于learned_concepts + concept_maturity）经产品讨论确认为核心差异化点。",
+      "satisfaction_before": null
+    }
+  ]
+}

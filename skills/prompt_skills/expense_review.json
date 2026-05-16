@@ -1,0 +1,34 @@
+{
+  "skill_id": "expense_review",
+  "type": "prompt",
+  "name": "消费复盘分析",
+  "description": "每周/月底主动发起，或用户主动请求时触发。基于消费录入数据，分析结构→识别异常→归因→给可执行建议。核心：不评判消费行为，只给客观数据和选择空间。",
+  "version": 1,
+  "created_at": "2026-05-15",
+  "last_updated": "2026-05-15",
+  "use_count": 0,
+  "positive_feedback": 0,
+  "negative_feedback": 0,
+  "satisfaction_rate": null,
+  "trigger_conditions": [
+    "定时触发：每周一早上（基于上周数据）",
+    "定时触发：每月1日（基于上月数据）",
+    "用户主动：消息包含'复盘/帮我看看/钱花哪了/分析一下'"
+  ],
+  "template": "以下是用户{period}的消费数据：\n{expense_data}\n\n请按以下结构发起复盘对话：\n\n第一步——数据呈现（客观，不评判）：\n用自然语言说出关键数字：总支出、各类别金额和占比、与上期对比。\n格式参考：\"上周你录入了{count}笔消费，共{total}元。其中餐饮{food}元（{food_pct}%）、娱乐{entertainment}元（{entertainment_pct}%）...\"\n\n第二步——识别一个值得关注的点（只说一个，不要轰炸）：\n选择占比最高或环比增长最大的类别。\n格式参考：\"有个小发现：{category}比上{period}多了{change_pct}%，主要是{example_items}。\"\n\n第三步——开放式询问（不直接建议）：\n\"这个属于计划内的吗？还是想控制一下？\"\n等用户回应后，再根据回应给对应建议。\n\n整体要求：\n- 不说\"你花太多了\"\"你应该省点\"\n- 数据说话，选择权在用户\n- 语气像朋友分享观察，不像财务审计",
+  "default_params": {
+    "highlight_count": 1,
+    "comparison_period": "上周/上月",
+    "tone": "朋友式观察，不评判",
+    "end_with_open_question": true
+  },
+  "tool_call": "analyze_expense_distribution",
+  "optimization_log": [
+    {
+      "version": 1,
+      "date": "2026-05-15",
+      "change": "初始版本。核心设计原则：只highlight一个问题（不轰炸）、开放式询问（不直接建议）经产品讨论确认。",
+      "satisfaction_before": null
+    }
+  ]
+}
