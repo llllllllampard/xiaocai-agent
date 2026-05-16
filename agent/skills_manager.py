@@ -174,8 +174,7 @@ def _trigger_meta_reflection(skill_id: str, file_rel: str, last_output: str, fee
     try:
         import os
         from openai import OpenAI
-        import streamlit as st
-        api_key = st.secrets.get("DASHSCOPE_API_KEY") or os.environ.get("DASHSCOPE_API_KEY")
+        api_key = os.environ.get("DASHSCOPE_API_KEY")
         client = OpenAI(
             api_key=api_key,
             base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"

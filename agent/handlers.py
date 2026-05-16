@@ -10,7 +10,6 @@ import re
 from pathlib import Path
 
 from openai import OpenAI
-import streamlit as st
 
 from .memory import EpisodicMemory, SemanticMemory, UserProfile
 from .tools import TOOL_DEFINITIONS, dispatch_tool
@@ -49,10 +48,7 @@ _DISCLAIMER = (
 
 
 def _get_client() -> OpenAI:
-    api_key = (
-        st.secrets.get("DASHSCOPE_API_KEY")
-        or os.environ.get("DASHSCOPE_API_KEY")
-    )
+    api_key = os.environ.get("DASHSCOPE_API_KEY")
     return OpenAI(api_key=api_key, base_url=BAILIAN_BASE_URL)
 
 

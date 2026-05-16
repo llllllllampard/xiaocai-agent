@@ -191,12 +191,6 @@ def compress_context_if_needed(history: list, threshold: int = 20) -> list:
     try:
         api_key = os.environ.get("DASHSCOPE_API_KEY")
         if not api_key:
-            try:
-                import streamlit as st
-                api_key = st.secrets.get("DASHSCOPE_API_KEY")
-            except Exception:
-                pass
-        if not api_key:
             return history[-keep_recent:]
 
         client = OpenAI(
