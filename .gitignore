@@ -2,6 +2,8 @@
 .env
 data/
 rag/chroma_db/
+rag/index.pkl
 __pycache__/
 *.pyc
+*.pyo
 fix_kb.py

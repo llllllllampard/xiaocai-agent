@@ -1,55 +1,54 @@
 """
-RAG 检索模块：查询改写 → ChromaDB 语义检索 → 相关度过滤 → 返回上下文片段。
+RAG 检索模块：纯 sentence-transformers + numpy 实现，无需 chromadb。
+索引在内存中构建，首次启动时加载一次，后续检索直接用向量余弦相似度。
 """
 
 import json
+import os
+import pickle
 from pathlib import Path
 
-import os
-import chromadb
-from chromadb.utils import embedding_functions
+import numpy as np
 
-# 使用 HuggingFace 镜像站，解决国内网络访问问题
 os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
 
 KB_DIR = Path(__file__).parent / "knowledge_base"
-CHROMA_DIR = Path(__file__).parent / "chroma_db"
-COLLECTION_NAME = "xiaocai_knowledge"
-SIMILARITY_THRESHOLD = 0.70   # 低于此相似度不注入
+INDEX_PATH = Path(__file__).parent / "index.pkl"   # 持久化向量索引
+SIMILARITY_THRESHOLD = 0.35
 TOP_K = 3
+MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
+
+# 模块级缓存：避免每次检索都重新加载模型
+_model = None
+_index: dict | None = None   # {"embeddings": np.ndarray, "docs": list[dict]}
 
 
-def _get_collection():
-    client = chromadb.PersistentClient(path=str(CHROMA_DIR))
-    ef = embedding_functions.SentenceTransformerEmbeddingFunction(
-        model_name="paraphrase-multilingual-MiniLM-L12-v2"
-    )
-    return client.get_or_create_collection(
-        name=COLLECTION_NAME,
-        embedding_function=ef,
-        metadata={"hnsw:space": "cosine"},
-    )
+def _get_model():
+    global _model
+    if _model is None:
+        from sentence_transformers import SentenceTransformer
+        _model = SentenceTransformer(MODEL_NAME)
+    return _model
 
 
 def build_index():
-    """读取知识库所有 JSON 文档，建立 ChromaDB 索引。只需运行一次。"""
-    collection = _get_collection()
-    docs, ids, metas = [], [], []
+    """读取所有知识库 JSON，计算 embedding，保存到 index.pkl。"""
+    model = _get_model()
+    docs = []
 
     for json_file in KB_DIR.rglob("*.json"):
         try:
             doc = json.loads(json_file.read_text(encoding="utf-8"))
         except Exception:
             continue
-        doc_id = doc.get("doc_id", json_file.stem)
-        # 用 summary + title + tags 拼成检索文本，content 作为返回内容
-        search_text = f"{doc.get('title', '')} {doc.get('summary', '')} {' '.join(doc.get('tags', []))}"
-        docs.append(search_text)
-        ids.append(doc_id)
-        metas.append({
-            "title": doc.get("title", ""),
-            "category": doc.get("category", ""),
-            "difficulty": doc.get("difficulty", ""),
+        search_text = (
+            f"{doc.get('title', '')} "
+            f"{doc.get('summary', '')} "
+            f"{' '.join(doc.get('tags', []))}"
+        )
+        docs.append({
+            "search_text": search_text,
+            "title":   doc.get("title", ""),
             "content": doc.get("content", ""),
             "summary": doc.get("summary", ""),
         })
@@ -58,52 +57,68 @@ def build_index():
         print("知识库为空，跳过索引构建。")
         return
 
-    # 分批 upsert，避免一次太大
-    batch = 50
-    for i in range(0, len(docs), batch):
-        collection.upsert(
-            documents=docs[i:i+batch],
-            ids=ids[i:i+batch],
-            metadatas=metas[i:i+batch],
-        )
+    texts = [d["search_text"] for d in docs]
+    embeddings = model.encode(texts, normalize_embeddings=True, show_progress_bar=False)
+
+    index = {"embeddings": embeddings, "docs": docs}
+    with open(INDEX_PATH, "wb") as f:
+        pickle.dump(index, f)
     print(f"索引构建完成，共 {len(docs)} 篇文档。")
+
+    global _index
+    _index = index
+
+
+def _load_index() -> dict | None:
+    global _index
+    if _index is not None:
+        return _index
+    if INDEX_PATH.exists():
+        try:
+            with open(INDEX_PATH, "rb") as f:
+                _index = pickle.load(f)
+            return _index
+        except Exception:
+            pass
+    # 索引不存在则动态构建
+    try:
+        build_index()
+    except Exception:
+        pass
+    return _index
 
 
 def retrieve(query: str, difficulty_filter: str = None) -> str:
     """
-    检索与 query 相关的知识片段。
-    返回拼接好的字符串，可直接注入 system prompt；无结果时返回空字符串。
+    检索与 query 最相关的知识片段，返回可注入 system prompt 的字符串。
+    无结果或出错时返回空字符串（不影响主流程）。
     """
     try:
-        collection = _get_collection()
-    except Exception:
-        return ""
+        index = _load_index()
+        if not index:
+            return ""
 
-    where = {"difficulty": difficulty_filter} if difficulty_filter else None
-    try:
-        results = collection.query(
-            query_texts=[query],
-            n_results=TOP_K,
-            where=where,
-            include=["metadatas", "distances"],
+        model = _get_model()
+        query_emb = model.encode([query], normalize_embeddings=True)[0]
+
+        embeddings = index["embeddings"]   # shape: (n_docs, dim)
+        scores = embeddings @ query_emb    # 余弦相似度（已归一化）
+
+        top_indices = np.argsort(scores)[::-1][:TOP_K]
+        snippets = []
+        for idx in top_indices:
+            if scores[idx] < SIMILARITY_THRESHOLD:
+                continue
+            doc = index["docs"][idx]
+            snippets.append(f"【{doc['title']}】\n{doc['content']}")
+
+        if not snippets:
+            return ""
+
+        return (
+            "以下是相关知识库内容，请基于此回答用户问题"
+            "（如与用户实际情况不符可灵活调整）：\n\n"
+            + "\n\n---\n\n".join(snippets)
         )
     except Exception:
         return ""
-
-    metadatas = results.get("metadatas", [[]])[0]
-    distances = results.get("distances", [[]])[0]
-
-    snippets = []
-    for meta, dist in zip(metadatas, distances):
-        similarity = 1 - dist   # cosine distance → similarity
-        if similarity < SIMILARITY_THRESHOLD:
-            continue
-        title = meta.get("title", "")
-        content = meta.get("content", "")
-        snippets.append(f"【{title}】\n{content}")
-
-    if not snippets:
-        return ""
-
-    return "以下是相关知识库内容，请基于此回答用户问题（如与用户实际情况不符可灵活调整）：\n\n" + \
-           "\n\n---\n\n".join(snippets)

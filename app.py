@@ -10,15 +10,15 @@ from pathlib import Path
 
 import streamlit as st
 
-# ── 启动时自动构建 RAG 索引（仅当 chroma_db 不存在时）─────────
+# ── 启动时自动构建 RAG 索引（仅当 index.pkl 不存在时）──────────
 import os
 os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
-_chroma_dir = Path(__file__).parent / "rag" / "chroma_db"
-if not _chroma_dir.exists() or not any(_chroma_dir.iterdir()) if _chroma_dir.exists() else True:
+_index_file = Path(__file__).parent / "rag" / "index.pkl"
+if not _index_file.exists():
     try:
         from rag.retriever import build_index
         build_index()
-    except Exception as _e:
+    except Exception:
         pass  # 索引构建失败不影响主程序启动，RAG 降级为空
 
 from agent.memory import UserProfile, EpisodicMemory, ConversationHistory
