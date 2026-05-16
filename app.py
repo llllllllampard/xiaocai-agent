@@ -787,24 +787,25 @@ header[data-testid="stHeader"] > div:not([data-testid="stDecoration"]) {
 
 <script>
 (function() {
-  // 只需同步顶栏内容层的 left，跟随 sidebar 右边界
   function sync() {
-    var sb = document.querySelector('[data-testid="stSidebar"]');
-    var bar = document.getElementById('xiaocai-topbar-inner');
-    var chatInput = document.querySelector('[data-testid="stChatInput"]');
-    if (!bar) return;
-    var left = (sb && sb.getBoundingClientRect().width > 20)
-               ? sb.getBoundingClientRect().right : 0;
-    bar.style.left = left + 'px';
-    if (chatInput) chatInput.style.left = left + 'px';
+    var header = document.querySelector('header[data-testid="stHeader"]');
+    var bar    = document.getElementById('xiaocai-topbar-inner');
+    var chat   = document.querySelector('[data-testid="stChatInput"]');
+    if (!header || !bar) return;
+
+    // Streamlit 原生 header 自己会随 sidebar 动态调整 left
+    // 我们直接读 header 的当前 left 值，跟随它即可
+    var headerLeft = header.getBoundingClientRect().left;
+    bar.style.left  = headerLeft + 'px';
+    if (chat) chat.style.left = headerLeft + 'px';
   }
-  sync();
-  var sb = document.querySelector('[data-testid="stSidebar"]');
-  if (sb) new ResizeObserver(sync).observe(sb);
-  new MutationObserver(sync).observe(document.body,
-    {childList:true, subtree:true, attributes:true,
-     attributeFilter:['style','class']});
-  setInterval(sync, 300);
+
+  // 用 requestAnimationFrame 在每帧都同步，动画过程中不会错位
+  function loop() {
+    sync();
+    requestAnimationFrame(loop);
+  }
+  loop();
 })();
 </script>
 """, unsafe_allow_html=True)
