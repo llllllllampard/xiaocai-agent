@@ -29,7 +29,7 @@ semantic = SemanticMemory()
 user_profile_store = UserProfile()
 
 BAILIAN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-MODEL = "qwen3.6-plus"
+MODEL = "glm-5.1"
 
 # ── C2：违规内容检测正则（预编译提升效率）────────────────────────
 _VIOLATION_PATTERNS = [
